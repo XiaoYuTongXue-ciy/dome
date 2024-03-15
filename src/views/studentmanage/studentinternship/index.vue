@@ -1,0 +1,181 @@
+<template>
+  <div>
+    <BasicTable @register="registerTable">
+      <template #toolbar>
+        <div class="wrap">
+          <div class="wrap-box">
+            <BasicUpload
+              :maxSize="20"
+              :maxNumber="10"
+              @change="handleChange"
+              :api="uploadApi"
+              :value="fileList"
+            />
+            <a-button type="primary" class="export" @click="getExportData"> 导出 </a-button>
+            <a-button type="primary" class="download" @click="getDownload"> 模板下载 </a-button>
+          </div>
+        </div>
+        <a-button type="primary" @click="handleCreate"> 新增实习学生 </a-button>
+      </template>
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'action'">
+          <TableAction
+            :actions="[
+              {
+                icon: 'clarity:note-edit-line',
+                onClick: handleEdit.bind(null, record),
+              },
+              {
+                icon: 'ant-design:delete-outlined',
+                color: 'error',
+                popConfirm: {
+                  title: '是否确认删除',
+                  placement: 'left',
+                  confirm: handleDelete.bind(null, record),
+                },
+              },
+            ]"
+          />
+        </template>
+      </template>
+    </BasicTable>
+    <DetailDrawer @register="registerDrawer" @success="handleSuccess" />
+  </div>
+</template>
+<script setup>
+  import { BasicTable, useTable, TableAction } from '@/components/Table';
+  import {
+    getPageInfo,
+    deleteItem,
+    getExport,
+    uploadApi,
+    getSysFile,
+  } from '@/api/studentinternship';
+  import { BasicUpload } from '@/components/Upload';
+  import { ref } from 'vue';
+  import { downloadByData } from '@/utils/file/download';
+
+  import { useDrawer } from '@/components/Drawer';
+  import { useLoading } from '@/components/Loading';
+  import DetailDrawer from './detailDrawer.vue';
+
+  import { columns, searchFormSchema } from './config';
+  import { useMessage } from '@/hooks/web/useMessage';
+  // import dayjs from 'dayjs';
+
+  const { notification } = useMessage();
+  let UploadIds = [];
+
+  const fileList = ref();
+
+  const [openFullLoading, closeFullLoading] = useLoading({
+    tip: '下载中...',
+  });
+
+  const [registerDrawer, { openDrawer }] = useDrawer();
+  const [registerTable, { reload }] = useTable({
+    title: '',
+    api: getPageInfo,
+    columns,
+    formConfig: {
+      labelWidth: 120,
+      schemas: searchFormSchema,
+      showAdvancedButton: true,
+    },
+    actionColOptions: {
+      span: 24,
+    },
+    useSearchForm: true,
+    showTableSetting: true,
+    bordered: true,
+    showIndexColumn: true,
+    rowSelection: {
+      onChange: (selectedRowKeys, selectedRows) => {
+        selectedRows.forEach((element) => {
+          UploadIds.push(element.id);
+        });
+      },
+    },
+    actionColumn: {
+      width: 80,
+      title: '操作',
+      dataIndex: 'action',
+      fixed: undefined,
+    },
+  });
+
+  function handleCreate() {
+    openDrawer(true, {
+      isUpdate: false,
+    });
+  }
+
+  function handleEdit(record) {
+    openDrawer(true, {
+      record,
+      isUpdate: true,
+    });
+  }
+
+  async function handleDelete(record) {
+    await deleteItem({ id: record.id });
+    notification.success({
+      message: '操作成功',
+      duration: 2,
+    });
+    reload();
+  }
+
+  function handleSuccess() {
+    notification.success({
+      message: '操作成功',
+      duration: 2,
+    });
+    reload();
+  }
+
+  // 导出
+  async function getExportData() {
+    openFullLoading();
+    const uniqueArray = [...new Set(UploadIds)];
+    const data = await getExport({ listIds: uniqueArray });
+    // data 为接口返回文件流数据，如果你的接口嵌套一层那就逐层去取
+    UploadIds = [];
+
+    downloadByData(data, `实习学生${formattedTime}.xlsx`);
+    closeFullLoading();
+  }
+
+  // 模板导出
+  const getDownload = async () => {
+    openFullLoading();
+    const data = await getSysFile({
+      Code: 'TemplateCode',
+    });
+    downloadByData(data, `实习学生模板.xlsx`);
+    closeFullLoading();
+  };
+
+  // 导入
+
+  const handleChange = (fileList) => {
+    console.log('fileList', fileList);
+  };
+</script>
+
+<style scoped lang="less">
+  .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 18rem;
+    margin-right: 3rem;
+
+    .wrap-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      width: 100%;
+    }
+  }
+</style>
